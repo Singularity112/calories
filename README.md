@@ -1,48 +1,48 @@
 # Calories
 
-Приложение для учета калорий, веса и активности на React + Vite. Состояние пользователя хранится в Firebase Auth + Firestore. В проекте уже лежат конфиги для Firebase Hosting и Firestore, поэтому другу нужно только подставить свои ключи, подключить свой Firebase-проект и выполнить деплой.
+Calories is a React + Vite app for tracking food, body weight, and daily activity. User data is stored in Firebase Auth + Firestore. Firebase Hosting and Firestore config are already included in this repo, so another developer only needs to add their own keys, connect their own Firebase project, and deploy.
 
-## Что понадобится
+## Requirements
 
-- Node.js LTS, лучше 20+
+- Node.js LTS, preferably 20+
 - npm
-- свой проект в Firebase
-- ключ OpenAI, если нужны AI-разбор еды и тренировки
+- your own Firebase project
+- an OpenAI API key if you want AI food and workout parsing
 
-## Быстрый старт
+## Quick Start
 
-### 1. Установить зависимости
+### 1. Install dependencies
 
 ```powershell
 npm install
 ```
 
-### 2. Создать Firebase-проект
+### 2. Create a Firebase project
 
-1. Открыть Firebase Console.
-2. Создать новый проект.
-3. Добавить в проект Web App.
-4. Сохранить web config из Project settings.
+1. Open Firebase Console.
+2. Create a new project.
+3. Add a Web App to the project.
+4. Save the web config from Project settings.
 
-### 3. Включить нужные сервисы в Firebase
+### 3. Enable the required Firebase services
 
 #### Authentication
 
-1. Открыть Authentication.
-2. Нажать Get started.
-3. В Sign-in method включить Google.
-4. Указать support email и сохранить.
+1. Open Authentication.
+2. Click Get started.
+3. Enable Google in Sign-in method.
+4. Set the support email and save.
 
 #### Firestore
 
-1. Открыть Firestore Database.
-2. Нажать Create database.
-3. Выбрать Production mode.
-4. Выбрать регион.
+1. Open Firestore Database.
+2. Click Create database.
+3. Choose Production mode.
+4. Select a region.
 
-### 4. Создать свой `.env.local`
+### 4. Create your own `.env.local`
 
-Скопировать `.env.example` в `.env.local` и заполнить своими значениями:
+Copy `.env.example` to `.env.local` and fill in your own values:
 
 ```env
 VITE_FIREBASE_API_KEY=
@@ -52,9 +52,10 @@ VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 VITE_OPENAI_API_KEY=
+VITE_OPENAI_MODEL=gpt-4.1
 ```
 
-Откуда взять значения Firebase:
+Where to find the Firebase values:
 
 1. Firebase Console
 2. Project settings
@@ -62,67 +63,69 @@ VITE_OPENAI_API_KEY=
 4. Your apps
 5. Config
 
-Важно:
+Important:
 
-- `.env.local` не коммитится, каждый заполняет его своими ключами.
-- `VITE_OPENAI_API_KEY` нужен только для AI-функций. Без него приложение запускается, но AI-разбор еды и тренировок работать не будет.
+- `.env.local` is not committed, so every developer must provide their own keys.
+- `VITE_OPENAI_API_KEY` is only required for AI features. Without it, the app still runs, but AI food and workout parsing will not work.
+- `VITE_OPENAI_MODEL` is optional. If omitted, the app defaults to `gpt-4.1`.
+- Example model values: `gpt-4.1`, `gpt-4.1-mini`, `gpt-4o`, `gpt-4o-mini`.
 
-### 5. Запустить локально
+### 5. Run locally
 
 ```powershell
 npm run dev
 ```
 
-После запуска приложение будет доступно локально, и можно проверить:
+After startup, verify that:
 
-1. вход через Google,
-2. создание пользователя в Firestore,
-3. сохранение профиля, еды, веса и активности.
+1. Google sign-in works,
+2. the user document is created in Firestore,
+3. profile, food, weight, and activity are saved correctly.
 
-Если Google login не открывается, проверить Authorized domains в Firebase Authentication. Для локального запуска обычно достаточно `localhost`.
+If Google sign-in does not open, check Authorized domains in Firebase Authentication. For local development, `localhost` is usually enough.
 
-## Деплой в свой Firebase
+## Deploy to Your Firebase Project
 
-### 1. Войти в Firebase CLI
+### 1. Sign in to Firebase CLI
 
 ```powershell
 npm run firebase:login
 ```
 
-### 2. Привязать проект
+### 2. Link the project
 
 ```powershell
 npx firebase-tools use --add
 ```
 
-Нужно выбрать свой `projectId`.
+Select your `projectId` when prompted.
 
-### 3. Задеплоить
+### 3. Deploy
 
 ```powershell
 npm run deploy
 ```
 
-Эта команда:
+This command:
 
-1. собирает приложение,
-2. деплоит Firebase Hosting,
-3. публикует Firestore rules,
-4. публикует Firestore indexes.
+1. builds the app,
+2. deploys Firebase Hosting,
+3. publishes Firestore rules,
+4. publishes Firestore indexes.
 
-## Что уже настроено в репозитории
+## What Is Already Configured
 
 - Firebase Hosting: `firebase.json`
 - Firestore rules: `firestore.rules`
 - Firestore indexes: `firestore.indexes.json`
 - Firebase client config: `src/lib/firebase.ts`
 
-## Что хранится в Firestore
+## Firestore Data Layout
 
 - `users/{uid}`
 - `users/{uid}/private/state`
 
-В `state` сейчас сохраняются:
+The `state` document currently stores:
 
 - `profile`
 - `mealHistory`
@@ -130,12 +133,12 @@ npm run deploy
 - `weightHistory`
 - `updatedAt`
 
-## Важно про `functions/`
+## Note About `functions/`
 
-Папка `functions/` в репозитории есть, но в текущем сценарии запуска и деплоя она не обязательна. Сейчас приложение использует Firebase Auth, Firestore и Hosting, а AI-запросы идут напрямую из фронтенда через `VITE_OPENAI_API_KEY`.
+The repo includes a `functions/` folder, but it is not required for the current local run and deploy flow. Right now the app uses Firebase Auth, Firestore, and Hosting, while AI requests are sent directly from the frontend using `VITE_OPENAI_API_KEY`.
 
-Если позже захочется спрятать OpenAI-ключ, тогда можно будет вынести AI-вызовы в Firebase Functions.
+If you want to hide the OpenAI key later, move the AI calls into Firebase Functions.
 
-## Дополнительно
+## Additional Notes
 
-Более подробный deploy-гайд лежит в `FIREBASE_DEPLOY.md`.
+More deployment details are available in `FIREBASE_DEPLOY.md`.

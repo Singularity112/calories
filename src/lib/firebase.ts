@@ -12,6 +12,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { doc, getDoc, getFirestore, setDoc } from 'firebase/firestore'
+import { getActiveLocale, type Locale } from './i18n'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -42,7 +43,7 @@ googleProvider.setCustomParameters({ prompt: 'select_account' })
 export const auth = app ? getAuth(app) : null
 export const db = app ? getFirestore(app) : null
 const openAiApiKey = import.meta.env.VITE_OPENAI_API_KEY
-const openAiModel = 'gpt-4o-mini'
+const openAiModel = import.meta.env.VITE_OPENAI_MODEL?.trim() || 'gpt-4.1'
 
 if (auth) {
   void setPersistence(auth, browserLocalPersistence)
@@ -60,6 +61,7 @@ export type RemoteUserState = {
 export type ParsedFoodResponse = {
   title: string
   summary: string
+  commentary: string
   totals: {
     calories: number
     protein: number
@@ -90,16 +92,71 @@ export type ParsedWorkoutResponse = {
   }
 }
 
+const aiLocaleCopy: Record<
+  Locale,
+  {
+    responseLanguage: string
+    foodDefaultTitle: string
+    foodDefaultSummary: string
+    foodDefaultCommentary: string
+    workoutDefaultSummary: string
+    walkingTitle: string
+    workoutTitle: string
+  }
+> = {
+  en: {
+    responseLanguage: 'English',
+    foodDefaultTitle: 'Meal',
+    foodDefaultSummary: 'Prepared a food draft.',
+    foodDefaultCommentary: 'Counted the items as written and used standard reference values for the estimate.',
+    workoutDefaultSummary: 'Prepared an activity draft.',
+    walkingTitle: 'Steps',
+    workoutTitle: 'Workout',
+  },
+  ru: {
+    responseLanguage: 'Russian',
+    foodDefaultTitle: 'Блюдо',
+    foodDefaultSummary: 'Подготовил черновик еды.',
+    foodDefaultCommentary: 'Посчитал позиции как они написаны и использовал стандартные справочные значения.',
+    workoutDefaultSummary: 'Подготовил черновик активности.',
+    walkingTitle: 'Шаги',
+    workoutTitle: 'Тренировка',
+  },
+  uk: {
+    responseLanguage: 'Ukrainian',
+    foodDefaultTitle: 'Страва',
+    foodDefaultSummary: 'Підготував чернетку їжі.',
+    foodDefaultCommentary: 'Порахував позиції так, як вони вказані, і використав стандартні довідкові значення.',
+    workoutDefaultSummary: 'Підготував чернетку активності.',
+    walkingTitle: 'Кроки',
+    workoutTitle: 'Тренування',
+  },
+  pl: {
+    responseLanguage: 'Polish',
+    foodDefaultTitle: 'Posilek',
+    foodDefaultSummary: 'Przygotowalem szkic posilku.',
+    foodDefaultCommentary: 'Policzylem pozycje tak, jak zostaly opisane, i uzylem standardowych wartosci referencyjnych.',
+    workoutDefaultSummary: 'Przygotowalem szkic aktywnosci.',
+    walkingTitle: 'Kroki',
+    workoutTitle: 'Trening',
+  },
+}
+
+function getAiLocaleCopy() {
+  return aiLocaleCopy[getActiveLocale()] ?? aiLocaleCopy.en
+}
+
 const foodSchema = {
   name: 'food_parser',
   strict: true,
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['title', 'summary', 'totals', 'items'],
+    required: ['title', 'summary', 'commentary', 'totals', 'items'],
     properties: {
       title: { type: 'string' },
       summary: { type: 'string' },
+      commentary: { type: 'string' },
       totals: {
         type: 'object',
         additionalProperties: false,
@@ -336,22 +393,30 @@ export async function saveUserState(
 }
 
 export async function parseFoodPrompt(prompt: string) {
+  const localeCopy = getAiLocaleCopy()
   const system = [
-    'Ты считаешь КБЖУ для трекера калорий.',
-    'Разбери сообщение пользователя на отдельные продукты и верни суммарные значения для каждого продукта.',
-    'Отдельно придумай короткое название всего блюда или набора еды, которое можно показать как один прием пищи.',
-    'Посчитай общие КБЖУ по всему блюду в totals.',
-    'Если пользователь не указал граммовку, оцени реалистично по контексту.',
-    'Если продукт сухой крупы указан как сухой вес, считай именно сухой вес.',
-    'Ответ должен быть только JSON по заданной схеме.',
-    'Язык ответа: русский.',
+    'You calculate calories and macros for a calorie tracker.',
+    'Split the user message into separate food items and return totals for the full meal.',
+    'Also create a short title for the whole meal or food set so it can be shown as a single meal entry.',
+    'Add commentary with 1-3 short sentences explaining the key assumptions behind the calculation, for example dry vs cooked weight, estimated grams, or what reference values you used.',
+    'Put the overall calories, protein, fat, and carbs into totals.',
+    'If the user did not provide weights, estimate them realistically from context.',
+    'If a dry grain or cereal is given as a dry weight, treat it as dry weight.',
+    'If the portion is obviously very large or calorie or carb heavy, you may add playful sarcastic remark',
+    'Return JSON only and follow the provided schema exactly.',
+    `Response language: ${localeCopy.responseLanguage}.`,
   ].join(' ')
 
   const result = await callOpenAiJson<ParsedFoodResponse>(system, prompt, foodSchema)
 
   return {
-    title: typeof result.title === 'string' && result.title.trim() ? result.title.trim() : 'Блюдо',
-    summary: typeof result.summary === 'string' && result.summary.trim() ? result.summary.trim() : 'Подготовил черновик еды.',
+    title: typeof result.title === 'string' && result.title.trim() ? result.title.trim() : localeCopy.foodDefaultTitle,
+    summary:
+      typeof result.summary === 'string' && result.summary.trim() ? result.summary.trim() : localeCopy.foodDefaultSummary,
+    commentary:
+      typeof result.commentary === 'string' && result.commentary.trim()
+        ? result.commentary.trim()
+        : localeCopy.foodDefaultCommentary,
     totals: {
       calories: clampNumber(result.totals?.calories),
       protein: clampNumber(result.totals?.protein),
@@ -359,7 +424,7 @@ export async function parseFoodPrompt(prompt: string) {
       carbs: clampNumber(result.totals?.carbs),
     },
     items: result.items.map((item) => ({
-      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : 'Блюдо',
+      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : localeCopy.foodDefaultTitle,
       grams: clampNumber(item.grams, 100),
       calories: clampNumber(item.calories),
       protein: clampNumber(item.protein),
@@ -374,15 +439,16 @@ export async function parseWorkoutPrompt(
   fallbackType: ParsedWorkoutType,
   currentWeight: number,
 ) {
+  const localeCopy = getAiLocaleCopy()
   const system = [
-    'Ты разбираешь описание активности для фитнес-трекера.',
-    'Выбери один тип активности: strength, cardio, walking, mobility.',
-    'Если пользователь пишет про шаги или прогулку, metric должен быть steps и value должен быть количеством шагов.',
-    'Во всех остальных случаях metric должен быть calories и value должен быть оценкой расхода калорий за сессию.',
-    'estimatedCalories должен всегда быть заполнен.',
-    'title должен быть коротким названием активности, details — коротким человекочитаемым описанием.',
-    'Ответ должен быть только JSON по заданной схеме.',
-    'Язык ответа: русский.',
+    'You parse activity descriptions for a fitness tracker.',
+    'Choose one activity type: strength, cardio, walking, mobility.',
+    'If the user describes steps or a walk, metric must be steps and value must be the number of steps.',
+    'In all other cases metric must be calories and value must be the estimated calorie burn for the session.',
+    'estimatedCalories must always be filled.',
+    'title should be a short activity name and details should be a short human-readable description.',
+    'Return JSON only and follow the provided schema exactly.',
+    `Response language: ${localeCopy.responseLanguage}.`,
   ].join(' ')
 
   const result = await callOpenAiJson<ParsedWorkoutResponse>(system, prompt, workoutSchema)
@@ -393,7 +459,7 @@ export async function parseWorkoutPrompt(
     summary:
       typeof result.summary === 'string' && result.summary.trim()
         ? result.summary.trim()
-        : 'Подготовил черновик активности.',
+        : localeCopy.workoutDefaultSummary,
     entry: {
       type: ['strength', 'cardio', 'walking', 'mobility'].includes(result.entry.type)
         ? result.entry.type
@@ -402,8 +468,8 @@ export async function parseWorkoutPrompt(
         typeof result.entry.title === 'string' && result.entry.title.trim()
           ? result.entry.title.trim()
           : fallbackType === 'walking'
-            ? 'Шаги'
-            : 'Тренировка',
+            ? localeCopy.walkingTitle
+            : localeCopy.workoutTitle,
       details: typeof result.entry.details === 'string' ? result.entry.details.trim() : '',
       value,
       metric,
